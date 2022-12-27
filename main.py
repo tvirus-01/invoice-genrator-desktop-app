@@ -65,7 +65,6 @@ def browseMasterDataFiles():
             filetypes = (("Excel files","*.xlsx*"),("all files", "*.*")))
     master_data_file.configure(text=filename)
 
-
 def update_master_data(filepath, db):    
     try:
         master_data = pd.read_excel(filepath)
@@ -78,7 +77,6 @@ def update_master_data(filepath, db):
         return "success"
     except:
         return "failed"
-
 
 def process_de_data(filepath, user_data, db):
     lifting_fee = pd.read_excel(filepath)
@@ -140,7 +138,6 @@ def process_de_data(filepath, user_data, db):
                 f'output/{invoice_excel_file}',
                 f'archive/{invoice_excel_file}'
             )
-
 
 def start_process():
     db = Database("invoice.db")
