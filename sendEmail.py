@@ -10,7 +10,7 @@ today = datetime.datetime.now()
 current_month = today.strftime('%B')
 current_year = today.strftime('%Y')
 
-def send_mail(send_from, send_to, files, invoice_number, receiver_name, total_amount, smtp_server, smtp_port, smtp_user, smtp_pass):
+def send_mail(send_from, send_to, files, invoice_number, receiver_name, total_amount, smtp_server, smtp_port, smtp_user, smtp_pass, please_confirm_text):
     assert isinstance(send_to, list)
 
     subject = f'Invoice {invoice_number} from Martrust Corporation Limited for {receiver_name} - Lifting Fees - {current_month} {current_year}'
@@ -20,7 +20,7 @@ def send_mail(send_from, send_to, files, invoice_number, receiver_name, total_am
 
         Please find attached your Lifting Fees - {current_month} {current_year} invoice {invoice_number} for USD {total_amount}.
 
-        Please confirm we are able to deduct these lifting fees from the respective currency balance.
+        {please_confirm_text}
 
         If you have any questions, please let us know.
 

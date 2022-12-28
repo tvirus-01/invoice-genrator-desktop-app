@@ -70,6 +70,32 @@ class Database:
         self.cur.execute(sql_create_master_data)
         self.conn.commit()
 
+        sql_create_invoice_data = """
+            CREATE TABLE IF NOT EXISTS 
+            invoices (
+                id INTEGER PRIMARY KEY, 
+                account_name text, 
+                invoice_file_name text, 
+                invoice_number text,
+                previous_month text,
+                year text,
+                user_name text
+            )"""
+        self.cur.execute(sql_create_invoice_data)
+        self.conn.commit()
+
+        
+        sql_create_account_list = """
+            CREATE TABLE IF NOT EXISTS 
+            account_list (
+                id INTEGER PRIMARY KEY, 
+                account_name text, 
+                user_name text, 
+                is_considered tinyint
+            )"""
+        self.cur.execute(sql_create_account_list)
+        self.conn.commit()
+
     def insert_user_data(self, gbp_rate, smtp_server, smtp_port, smtp_user, smtp_sender, smtp_pass):
         user_name = 'admin'
 
@@ -221,3 +247,79 @@ class Database:
     def fetch_users(self):
         self.cur.execute("SELECT * FROM users WHERE user_type='user' ")
         return self.cur.fetchall()
+
+    def create_invoice(self, contact_name, file_name, invoice_number, month, year, user_name):
+        sql = f"""
+            INSERT INTO invoices VALUES(
+                NULL,
+                '{contact_name}',
+                '{file_name}',
+                '{invoice_number}',
+                '{month}',
+                '{year}',
+                '{user_name}'
+            )        
+        """
+        self.cur.execute(sql)
+        self.conn.commit()
+
+    def invoice_exists(self, contact_name, month, year):
+        sql = f"SELECT * FROM invoices WHERE account_name='{contact_name}' AND previous_month='{month}' AND year='{year}' "
+        self.cur.execute(sql)
+        rows = self.cur.fetchall()
+
+        if len(rows) > 0:
+            return rows[0]
+        else:
+            return False
+
+    def get_num_invoice(self, month, year):
+        sql = f"SELECT * FROM invoices WHERE previous_month='{month}' AND year='{year}' "
+        self.cur.execute(sql)
+        rows = self.cur.fetchall()
+
+        return len(rows)
+
+    def check_email_condition(self, contact_name):
+        sql = f"SELECT * FROM email_condition WHERE contact_name='{contact_name}'"
+        self.cur.execute(sql)
+        rows = self.cur.fetchall()
+
+        if len(rows) == 0:
+            pass
+        else:
+            if rows[0][2].lower() == 'auto':
+                return True
+        
+        return False
+
+    def create_account_list(self, contact_name, user_name, is_considered):
+        self.cur.execute(f"SELECT * FROM account_list WHERE user_name = '{user_name}' AND account_name = '{contact_name}' ")
+        rows = self.cur.fetchall()
+
+        if len(rows) == 0:
+            sql = f"""
+                INSERT INTO account_list VALUES(
+                    NULL,
+                    '{contact_name}',
+                    '{user_name}',
+                    {is_considered}
+                )        
+            """
+        else:
+            sql = f"UPDATE account_list SET is_considered = {is_considered} WHERE id = {rows[0][0]} "
+
+        self.cur.execute(sql)
+        self.conn.commit()
+
+    def check_account_list(self, account_name, user_name):
+        self.cur.execute(f"SELECT * FROM account_list WHERE user_name = '{user_name}' AND account_name = '{account_name}' ")
+        rows = self.cur.fetchall()
+
+        if len(rows) == 0:
+            return False
+
+        if rows[0][-1] == 1:
+            return True
+        else:
+            return False

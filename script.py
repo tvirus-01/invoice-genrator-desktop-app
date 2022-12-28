@@ -2,23 +2,38 @@ from reportlab.pdfgen import canvas
 import os, datetime, string, random
 import xlsxwriter
 
-def genrate_pdf(account_name: str, address: str, unit_price: str, vat_type: str, gbp_rate: str):
+public_dir_loc = "C:/Users/Public/Documents"
+app_dir = public_dir_loc+"/invoicegenrator"
+output_dir = app_dir+"/output"
+archive_dir = app_dir+"/archive"
+
+def genrate_pdf(account_name: str, address: str, unit_price: str, vat_type: str, gbp_rate: str, num_of_invoice: str):
     today = datetime.datetime.now()
     current_month = today.strftime('%b')
     current_year = today.strftime('%y')
     current_date = f"{today.strftime('%d')}-{current_month}-{today.strftime('%Y')}"
 
+    first = datetime.date.today().replace(day=1)
+    last_month = first - datetime.timedelta(days=1)
+    last_month_number = last_month.strftime("%m")
+    last_year_number = last_month.strftime("%Y")
+
+    if len(num_of_invoice) == 2:
+        num_of_invoice = f"0{num_of_invoice}"
+    elif len(num_of_invoice) == 1:
+        num_of_invoice = f"00{num_of_invoice}"
+
     due_date = today + datetime.timedelta(days=6)
     due_date_str = f"{due_date.strftime('%d')}-{due_date.strftime('%b')}-{due_date.strftime('%Y')}"
     
-    invoice_number = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
+    invoice_number = f"{last_year_number}/{last_month_number}-{num_of_invoice}"
 
     unit_price_gbp = float(unit_price) / float(gbp_rate)
     unit_price_gbp = str(round(unit_price_gbp, 2))
 
     invoice_title = f"{account_name}-Lifting Fees-{today.strftime('%d')}{today.strftime('%m')}{today.strftime('%Y')}"
 
-    c = canvas.Canvas(f"output/{invoice_title}.pdf", bottomup=0)
+    c = canvas.Canvas(f"{output_dir}/{invoice_title}.pdf", bottomup=0)
     c.setTitle(invoice_title)
 
     c.setFont("Helvetica", 22)
@@ -41,7 +56,7 @@ def genrate_pdf(account_name: str, address: str, unit_price: str, vat_type: str,
     c.drawString(350, 120, invoice_number)
     
     c.drawString(350, 140, "Reference")
-    c.drawString(350, 150, f"Lifting Fees - {current_month} {current_year}")
+    c.drawString(350, 150, f"Lifting Fees - {last_month_number} {last_year_number}")
     
     c.drawString(350, 170, "Vat Number")
     c.drawString(350, 180, "2938729129")
@@ -57,7 +72,7 @@ def genrate_pdf(account_name: str, address: str, unit_price: str, vat_type: str,
     # Amount Desc
     c.line(20, 265, 580, 265)
     c.drawString(25, 250, "Description")
-    c.drawString(25, 280, f"Lifting Fees - {current_month} {current_year}")
+    c.drawString(25, 280, f"Lifting Fees - {last_month_number} {last_year_number}")
     
     c.drawString(300, 250, "Quantity")
     c.drawString(300, 280, "1.00")
@@ -140,7 +155,7 @@ def genrate_excel(account_name: str, lifting_data: list):
 
     file_name = f"{account_name}-Lifting Fees-{today.strftime('%d')}{today.strftime('%m')}{today.strftime('%Y')}"
     
-    workbook = xlsxwriter.Workbook(f'output/{file_name}.xlsx')
+    workbook = xlsxwriter.Workbook(f'{output_dir}/{file_name}.xlsx')
 
     cell_fill = workbook.add_format()
     cell_fill.set_pattern(1)

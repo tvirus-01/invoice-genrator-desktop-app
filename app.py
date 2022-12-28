@@ -5,11 +5,12 @@ from db import Database
 from threading import Thread
 from time import sleep
 import pandas as pd
-from script import genrate_pdf, genrate_excel
+from script import genrate_pdf, genrate_excel, app_dir, output_dir, archive_dir
 from sendEmail import send_mail
-import os, shutil
+import os, shutil, datetime
 from login import generate_password_hash, set_salt
 from  tkinter import ttk
+from tkinter.messagebox import askokcancel, showinfo, WARNING
 
 
 class App(customtkinter.CTk):
@@ -23,7 +24,15 @@ class App(customtkinter.CTk):
         self.success_color = "#2bd12b"
         self.theme_color = "#242424"
 
-        self.db = Database("invoice.db")
+        if os.path.isdir(app_dir) == False:          
+            os.mkdir(app_dir)
+
+        if os.path.isdir(output_dir) == False:          
+            os.mkdir(output_dir)
+        if os.path.isdir(archive_dir) == False:          
+            os.mkdir(archive_dir)
+
+        self.db = Database(app_dir+"/invoice.db")
 
         self.title("Invoice Generator")
         self.geometry("1060x520")
@@ -64,6 +73,8 @@ class App(customtkinter.CTk):
             self.is_admin = True
         else:
             self.is_admin = False
+
+        self.current_user_name = self.user_session[1]
 
         self.sideBarFrame()
 
@@ -254,10 +265,229 @@ class App(customtkinter.CTk):
             self.db.add_master_data(contact_name, self.master_data[contact_name])
 
         self.master_data_msg.configure(text="!Master Data Updated", text_color=self.success_color)
+        sleep(3)
+        self.master_data_msg.configure(text="", text_color=self.success_color)
+        return
+
 
     def UserViewFrame(self):
         # create users frame
         self.user_view_frame = customtkinter.CTkFrame(self, corner_radius=0, fg_color="transparent")
+
+        # lifting file broswe btn
+        lifting_fee_file_lebel = CTkLabel(self.user_view_frame, text='Upload Lifting Fee File', font=('bold', 14))
+        lifting_fee_file_lebel.grid(row=1, column=0, sticky=W, padx=(150, 0), pady=(100, 0), columnspan=1)
+
+        browse_lifting_file = CTkButton(self.user_view_frame, command=lambda: Thread(target=self.browseLiftingFiles).start(), text='Browse', width=200, height=40,border_width=1, corner_radius=20, fg_color="#63B3CC", border_color="#63B3CC", hover_color="#242424", font=('Bold', 20))
+        browse_lifting_file.grid(row=1, column=2, padx=10, pady=(100,0), columnspan=2)
+
+        self.lifting_fee_file = CTkLabel(self.user_view_frame, text='', font=('bold', 12))
+        self.lifting_fee_file.grid(row=2, column=0, sticky=W, padx=(150, 0), pady=(5, 0), columnspan=3)
+
+        self.msg_start_process = CTkLabel(self.user_view_frame, text='', font=('bold', 16))
+        self.msg_start_process.grid(row=3, column=0, sticky=W, padx=(150, 0), pady=(10, 40), columnspan=3)
+
+        # Account list file broswe btn
+        account_list_file_lebel = CTkLabel(self.user_view_frame, text='Upload Account list File', font=('bold', 14))
+        account_list_file_lebel.grid(row=4, column=0, sticky=W, padx=(150, 0), pady=(0, 0), columnspan=1)
+
+        browse_account_list_file = CTkButton(self.user_view_frame, command=lambda: Thread(target=self.browseAccountListFiles).start(), text='Browse', width=200, height=40,border_width=1, corner_radius=20, fg_color="#63B3CC", border_color="#63B3CC", hover_color="#242424", font=('Bold', 20))
+        browse_account_list_file.grid(row=5, column=2, padx=10, columnspan=2)
+
+        self.account_list_file = CTkLabel(self.user_view_frame, text='', font=('bold', 12))
+        self.account_list_file.grid(row=6, column=0, sticky=W, padx=(150, 0), pady=(5, 0), columnspan=3)
+
+        self.account_list_file_process = CTkLabel(self.user_view_frame, text='', font=('bold', 16))
+        self.account_list_file_process.grid(row=7, column=0, sticky=W, padx=(150, 0), pady=(20, 0), columnspan=3)
+
+    def browseAccountListFiles(self):
+        filename = filedialog.askopenfilename(
+                initialdir = "/",
+                title = "Select Account List File",
+                filetypes = (("Excel files","*.xlsx*"),("all files", "*.*")))
+        
+        if filename == "":
+            return
+
+        self.account_list_file.configure(text=filename.split("/")[-1])
+
+        account_list = pd.read_excel(filename)
+        account_list_col = ['SrN0. ', 'Account Name', 'isConsidered']
+
+        if account_list_col != list(account_list.columns):
+            self.account_list_file_process.configure(text="!Inavlid Account List File.", text_color=self.error_color)
+            return
+
+        for index, row in account_list.iterrows():
+            if pd.isna(row['Account Name']) == False:
+                self.db.create_account_list(row['Account Name'], self.user_session[1], row['isConsidered'])
+
+        self.account_list_file_process.configure(text="!Process Done.", text_color=self.success_color)
+        sleep(3)
+        self.account_list_file_process.configure(text="", text_color=self.success_color)
+        return
+
+    
+    def browseLiftingFiles(self):
+        filename = filedialog.askopenfilename(
+                initialdir = "/",
+                title = "Select Lifiting Fee File",
+                filetypes = (("Excel files","*.xlsx*"),("all files", "*.*")))
+        
+        if filename == "":
+            return
+
+        self.lifting_fee_file.configure(text=filename.split("/")[-1])
+
+        user_data = self.db.fetch_user_data()
+        if len(user_data) == 0:
+            self.msg_start_process.configure(text="!No Email configaration found, please contact with admin", text_color=self.error_color)
+            return
+
+        self.msg_start_process.configure(text="!Checking File", text_color=self.info_color)
+        sleep(1)
+
+        self.process_de_data(filename, user_data[0])
+
+        self.msg_start_process.configure(text=f"!Process is complete successfully", text_color=self.success_color)
+        showinfo(
+            title='Process is complete successfully',
+            message='All invoice is genrated and sent to email address'
+        )
+        sleep(3)
+        self.msg_start_process.configure(text=f"", text_color=self.success_color)
+
+        return
+
+
+    def process_de_data(self, filepath, user_data):
+        lifting_fee = pd.read_excel(filepath)
+
+        lifting_file_index = ['Buy', 'Buy Amount', 'Sell', 'Sell Amount', 'Fee', 'Total Settlement', 'Beneficiary', 'When Booked', 'When Created', 'Created By', 'Delivery Method', 'Reference', 'Delivery Country ISO Code', 'Delivery Country Name', 'Your Reference', 'Cheque Number', 'Beneficiary ID', 'Execution Date', 'Payment Line Status', 'Payment Number', 'Processing Date', 'Bank Reference Number', 'AccountName', 'Bank Value Date', 'Exchange Rate', 'Our Reference', 'Charges Type', 'USD AMOUNT']
+
+        if list(lifting_fee.columns) != lifting_file_index:
+            self.msg_start_process.configure(text="!Invalid File", text_color=self.error_color)
+            return
+
+        self.msg_start_process.configure(text="!File is valid", text_color=self.success_color)
+        sleep(1)
+
+        today = datetime.date.today()
+        first = today.replace(day=1)
+        last_month = first - datetime.timedelta(days=1)
+        last_month_number = last_month.strftime("%m")
+        last_year_number = last_month.strftime("%Y")
+
+        self.msg_start_process.configure(text="!Processing data", text_color=self.info_color)
+        sleep(1)
+
+        processed_data = {}
+        for index, row in lifting_fee.iterrows():
+            if pd.isna(row['AccountName']) == False:
+                if row['AccountName'] in processed_data:
+                    processed_data[row['AccountName']].append(row.to_dict())
+                else:
+                    processed_data[row['AccountName']] = [row.to_dict()]
+
+        self.msg_start_process.configure(text="!Generating invoices", text_color=self.info_color)
+        sleep(1)
+
+        for account_name in processed_data:
+            total_amount = 0
+
+            is_considered = self.db.check_account_list(account_name, self.user_session[1])
+            if is_considered:
+                for row in processed_data[account_name]:
+                    total_amount += row['USD AMOUNT']
+
+                master_data = self.db.fetch_master_data(account_name)
+                if len(master_data) == 0:
+                    pass
+                else:
+                    master_data = master_data[0]
+                    
+                    if master_data[-1].lower() == "active":
+                        customer_address = master_data[2]
+                        vat_type = master_data[6]
+                        email_ids = master_data[3].split(";")
+
+                        invoice_exists = self.db.invoice_exists(account_name, last_month_number, last_year_number)
+
+                        if invoice_exists == False:
+                            confirm_creating_invoice = True
+                        else:
+                            confirm_creating_invoice = self.confirm_genration_invoice(account_name, invoice_exists[-1])
+
+                        if confirm_creating_invoice:
+                            self.msg_start_process.configure(text=f"!Creating invoice for {account_name}", text_color=self.info_color)
+                            sleep(0.5)
+
+                            num_invoice = self.db.get_num_invoice(last_month_number, last_year_number)
+                            
+                            create_invoice = genrate_pdf(
+                                account_name,
+                                customer_address,
+                                str(total_amount),
+                                vat_type,
+                                str(user_data[2]),
+                                str(num_invoice+1)
+                            )
+
+                            invoice_pdf_file = create_invoice[0]
+                            invoice_number = create_invoice[1]
+
+                            invoice_excel_file = genrate_excel(account_name, processed_data[account_name])
+
+                            files = [f'{output_dir}/{invoice_pdf_file}', f'{output_dir}/{invoice_excel_file}']
+
+                            self.msg_start_process.configure(text=f"!Sending email to {account_name}", text_color=self.info_color)
+                            sleep(0.5)
+
+                            is_email_auto = self.db.check_email_condition(account_name)
+                            
+                            if is_email_auto:
+                                please_confirm_text = "We will deduct these lifting fees from the respective currency balance."
+                            else:
+                                please_confirm_text = "Please confirm we are able to deduct these lifting fees from the respective currency balance."
+
+                            send_mail(
+                                send_from=user_data[5],
+                                send_to=email_ids,
+                                files=files,
+                                invoice_number=invoice_number,
+                                receiver_name=account_name,
+                                total_amount=total_amount,
+                                smtp_server=user_data[3],
+                                smtp_port=user_data[7],
+                                smtp_user=user_data[4],
+                                smtp_pass=user_data[6],
+                                please_confirm_text=please_confirm_text
+                            )
+
+                            self.msg_start_process.configure(text=f"!Email sent to {account_name}", text_color=self.info_color)
+                            sleep(0.5)
+
+                            shutil.move(
+                                f'{output_dir}/{invoice_pdf_file}',
+                                f'{archive_dir}/{invoice_pdf_file}'
+                            )
+                            shutil.move(
+                                f'{output_dir}/{invoice_excel_file}',
+                                f'{archive_dir}/{invoice_excel_file}'
+                            )
+
+                            self.db.create_invoice(account_name, invoice_pdf_file.replace(".pdf", ""), invoice_number, last_month_number, last_year_number, self.current_user_name)
+                        else:
+                            self.msg_start_process.configure(text=f"!No new invoice genrating for {account_name}", text_color=self.info_color)
+                            sleep(1)
+
+    def confirm_genration_invoice(self, account_name, user_name):
+        answer = askokcancel(
+            title= 'Confirmation',
+            message= f'Invoice is already generated for {account_name} by {user_name} \nDo you still want to generate a new one?',
+            icon=WARNING)
+
+        return answer
     
     
     def UsersFrame(self):
